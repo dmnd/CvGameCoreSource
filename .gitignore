@@ -1,0 +1,5 @@
+BuildOutput
+BuildTemp
+*.vs2008.ncb
+*.vs2008.suo
+*.user
