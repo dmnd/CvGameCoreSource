@@ -22194,6 +22194,50 @@ void CvPlayer::Read(FDataStream& kStream)
 		//m_pDiplomacyRequests->Read(kStream);
 	}
 
+	/**
+	 * Warring sequential humans deadlock fix
+	 * 
+	 * Upon loading an autosave, all human players at war were loaded into the
+	 * game with inactive turns, making it impossible for them to end the turn.
+	 *
+	 * The following hack detects and fixes that problem by forcing the first
+	 * human player in sequential turn mode to be active.
+	 *
+	 * Hopefully this has no side effects but it's impossible for me to know.
+	 */
+	if(GC.getGame().isOption(GAMEOPTION_DYNAMIC_TURNS) && isHuman()) {
+		NET_MESSAGE_DEBUG_OSTR_ALWAYS("read() for human player " << getName());
+		NET_MESSAGE_DEBUG_OSTR_ALWAYS("m_bTurnActive is " << m_bTurnActive);
+		NET_MESSAGE_DEBUG_OSTR_ALWAYS("m_bAutoMoves is " << m_bAutoMoves);
+		NET_MESSAGE_DEBUG_OSTR_ALWAYS("m_bProcessedAutoMoves is " << m_bProcessedAutoMoves);
+		NET_MESSAGE_DEBUG_OSTR_ALWAYS("m_bDynamicTurnsSimultMode is " << m_bDynamicTurnsSimultMode);
+
+		if (!m_bDynamicTurnsSimultMode) {
+			// this human is in sequential turns mode,
+			// so make sure there is an active human in the game
+			static bool s_bVerified1stSeqentialHumanIsActive = false;
+			if (!s_bVerified1stSeqentialHumanIsActive) {
+				s_bVerified1stSeqentialHumanIsActive = true;
+
+				if (m_bTurnActive) {
+					NET_MESSAGE_DEBUG_OSTR_ALWAYS(
+						"first sequential human was already active");
+				} else {
+					NET_MESSAGE_DEBUG_OSTR_ALWAYS(
+						"hacktivating unexpectedly inactive player :(");
+
+					// force the player to be active
+					m_bTurnActive = true;
+
+					// also turn off automoves - without this, the turn
+					// becomes inactive before the player can do anything
+					m_bAutoMoves = false;
+					m_bProcessedAutoMoves = false;
+				}
+			}
+		}
+	}
+
 	if(m_bTurnActive)
 		GC.getGame().changeNumGameTurnActive(1, std::string("setTurnActive() [loading save game] for player ") + getName());
 
